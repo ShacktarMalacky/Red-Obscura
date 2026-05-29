@@ -1,0 +1,494 @@
+# 1. Crear carpeta del proyecto y entrar
+cd ~
+mkdir next-red-oscura && cd next-red-oscura
+
+# 2. Inicializar proyecto (sin interactividad)
+npm init -y
+
+# 3. Instalar dependencias
+npm install next react react-dom firebase
+
+# 4. Crear estructura de carpetas
+mkdir -p src/app src/components src/context
+
+# 5. Configurar next.config.js
+cat > next.config.js << 'EOF'
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  experimental: {
+    appDir: true,
+  },
+};
+module.exports = nextConfig;
+EOF
+
+# 6. Configurar package.json con scripts
+node -e "
+const pkg = require('./package.json');
+pkg.scripts = {
+  dev: 'next dev',
+  build: 'next build',
+  start: 'next start'
+};
+require('fs').writeFileSync('./package.json', JSON.stringify(pkg, null, 2));
+"
+
+# 7. Crear archivos del juego (firebase, context, componentes)
+cat > src/firebase.js << 'FIREBASEEOF'
+import { initializeApp } from 'firebase/app';
+import { getAuth } from 'firebase/auth';
+import { getFirestore } from 'firebase/firestore';
+
+const firebaseConfig = {
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "TU_API_KEY",
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || "TU_PROYECTO.firebaseapp.com",
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "TU_PROYECTO",
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || "TU_PROYECTO.appspot.com",
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "TU_MESSAGING_SENDER_ID",
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || "TU_APP_ID"
+};
+
+const app = initializeApp(firebaseConfig);
+export const auth = getAuth(app);
+export const db = getFirestore(app);
+FIREBASEEOF
+
+# 8. GameContext (componente cliente)
+cat > src/context/GameContext.jsx << 'CONTEXTEOF'
+'use client';
+import React, { createContext, useState, useEffect } from 'react';
+import { auth, db } from '../firebase';
+import { onAuthStateChanged, sendEmailVerification } from 'firebase/auth';
+import { doc, onSnapshot, setDoc, updateDoc, increment, collection, addDoc } from 'firebase/firestore';
+
+export const GameContext = createContext();
+
+export function GameProvider({ children }) {
+  const [user, setUser] = useState(null);
+  const [player, setPlayer] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const unsubAuth = onAuthStateChanged(auth, (firebaseUser) => {
+      if (firebaseUser) {
+        setUser(firebaseUser);
+        if (!firebaseUser.emailVerified) sendEmailVerification(firebaseUser);
+        const unsubPlayer = onSnapshot(doc(db, 'jugadores', firebaseUser.uid), (snap) => {
+          if (snap.exists()) setPlayer(snap.data());
+          else {
+            const newPlayer = {
+              uid: firebaseUser.uid,
+              username: `Hacker_${Math.floor(Math.random() * 10000)}`,
+              level: 1, xp: 0, credits: 100, clan: null,
+              scripts: {
+                mineria: { level: 1, active: true },
+                defensa: { level: 0, active: false },
+                ataque: { level: 0, active: false }
+              },
+              createdAt: Date.now()
+            };
+            setDoc(doc(db, 'jugadores', firebaseUser.uid), newPlayer).then(() => setPlayer(newPlayer));
+          }
+        });
+        setLoading(false);
+        return () => unsubPlayer();
+      } else {
+        setUser(null);
+        setPlayer(null);
+        setLoading(false);
+      }
+    });
+    return () => unsubAuth();
+  }, []);
+
+  // Minería automática (solo en el cliente)
+  useEffect(() => {
+    if (!player) return;
+    const interval = setInterval(async () => {
+      const nivel = player.scripts?.mineria?.level || 1;
+      const activo = player.scripts?.mineria?.active;
+      if (!activo) return;
+      await updateDoc(doc(db, 'jugadores', player.uid), {
+        xp: increment(1 * nivel),
+        credits: increment(2 * nivel)
+      });
+      await addDoc(collection(db, 'mensajes'), {
+        channel: 'global', user: 'Sistema',
+        text: `${player.username} ha minado datos (+${nivel} XP, +${2*nivel} créditos).`,
+        timestamp: Date.now(), uid: 'sistema'
+      });
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [player?.scripts?.mineria?.active, player?.scripts?.mineria?.level, player?.uid]);
+
+  const updatePlayer = async (updates) => {
+    if (!user) return;
+    await updateDoc(doc(db, 'jugadores', user.uid), updates);
+  };
+
+  return (
+    <GameContext.Provider value={{ user, player, loading, updatePlayer }}>
+      {children}
+    </GameContext.Provider>
+  );
+}
+CONTEXTEOF
+
+# 9. Componentes (Login, Dashboard, Chat, Clan, Misiones, Mapa, HackingGame)
+# Los copio del script anterior, pero adaptados a 'use client' y sin rutas (todo en una página)
+cat > src/components/Login.jsx << 'LOGINEOF'
+'use client';
+import React, { useState } from 'react';
+import { auth } from '../firebase';
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
+
+export default function Login() {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [isRegister, setIsRegister] = useState(false);
+  const [error, setError] = useState('');
+  const [resetEmail, setResetEmail] = useState('');
+  const [showReset, setShowReset] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      if (isRegister) await createUserWithEmailAndPassword(auth, email, password);
+      else await signInWithEmailAndPassword(auth, email, password);
+    } catch (err) { setError(err.message); }
+  };
+
+  const handleReset = async () => {
+    if (!resetEmail.trim()) return;
+    try {
+      await sendPasswordResetEmail(auth, resetEmail);
+      setShowReset(false);
+      setError('Correo de recuperación enviado.');
+    } catch (err) { setError(err.message); }
+  };
+
+  return (
+    <div className="login-container">
+      <h1 className="neon-text">🔴 RED OSCURA</h1>
+      {showReset ? (
+        <div>
+          <input value={resetEmail} onChange={e => setResetEmail(e.target.value)} placeholder="Email" />
+          <button onClick={handleReset}>Enviar recuperación</button>
+          <p onClick={() => setShowReset(false)} style={{cursor:'pointer', color:'#00ff41'}}>Volver</p>
+        </div>
+      ) : (
+        <form onSubmit={handleSubmit}>
+          <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="Email" required />
+          <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Contraseña" required />
+          <button type="submit">{isRegister ? 'Registrarse' : 'Iniciar sesión'}</button>
+          <p className="toggle-auth" onClick={() => setIsRegister(!isRegister)}>
+            {isRegister ? '¿Ya tienes cuenta? Inicia sesión' : '¿No tienes cuenta? Regístrate'}
+          </p>
+          <p onClick={() => setShowReset(true)} style={{cursor:'pointer', color:'#00ff41'}}>¿Olvidaste tu contraseña?</p>
+          {error && <p className="error">{error}</p>}
+        </form>
+      )}
+    </div>
+  );
+}
+LOGINEOF
+
+cat > src/components/Dashboard.jsx << 'DASHEOF'
+'use client';
+import React, { useContext } from 'react';
+import { GameContext } from '../context/GameContext';
+import Chat from './Chat';
+import Misiones from './Misiones';
+import Clan from './Clan';
+import Mapa from './Mapa';
+
+export default function Dashboard() {
+  const { player, loading } = useContext(GameContext);
+  if (loading) return <div className="loading">Conectando a la Red...</div>;
+  if (!player) return <div className="loading">Cargando perfil...</div>;
+  return (
+    <div className="dashboard">
+      <header>
+        <h1 className="neon-text">🔴 RED OSCURA</h1>
+        <div className="player-info">
+          <span>👤 {player.username}</span>
+          <span>🎚️ Nivel {player.level}</span>
+          <span>💰 {player.credits}</span>
+          <span>⭐ {player.xp} XP</span>
+        </div>
+      </header>
+      <div className="game-grid">
+        <div className="left-column"><Clan /><Mapa /></div>
+        <div className="center-column"><Chat /></div>
+        <div className="right-column"><Misiones /></div>
+      </div>
+    </div>
+  );
+}
+DASHEOF
+
+cat > src/components/Chat.jsx << 'CHATEOF'
+'use client';
+import React, { useState, useEffect, useContext } from 'react';
+import { GameContext } from '../context/GameContext';
+import { db } from '../firebase';
+import { collection, addDoc, onSnapshot, query, orderBy, limit, where } from 'firebase/firestore';
+
+export default function Chat() {
+  const { player } = useContext(GameContext);
+  const [messages, setMessages] = useState([]);
+  const [input, setInput] = useState('');
+  const [channel, setChannel] = useState('global');
+
+  useEffect(() => {
+    let q;
+    if (channel === 'global') q = query(collection(db, 'mensajes'), where('channel', '==', 'global'), orderBy('timestamp', 'asc'), limit(50));
+    else if (channel === 'clan' && player?.clan) q = query(collection(db, 'mensajes'), where('channel', '==', `clan_${player.clan}`), orderBy('timestamp', 'asc'), limit(50));
+    else q = query(collection(db, 'mensajes'), where('channel', '==', 'global'), orderBy('timestamp', 'asc'), limit(50));
+    const unsub = onSnapshot(q, (snap) => setMessages(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
+    return () => unsub();
+  }, [channel, player?.clan]);
+
+  const sendMessage = async () => {
+    if (!input.trim() || !player) return;
+    if (input.startsWith('/')) {
+      const parts = input.split(' ');
+      if (parts[0] === '/roll') {
+        const dice = Math.floor(Math.random() * 20) + 1;
+        await addDoc(collection(db, 'mensajes'), { channel, user: 'Sistema', text: `${player.username} ha sacado un ${dice} en 1d20.`, timestamp: Date.now(), uid: 'sistema' });
+        setInput(''); return;
+      }
+    }
+    await addDoc(collection(db, 'mensajes'), { channel, user: player.username, text: input, timestamp: Date.now(), uid: player.uid });
+    setInput('');
+  };
+
+  return (
+    <div className="panel">
+      <h2>💬 Chat {channel === 'global' ? 'Global' : 'Clan'}</h2>
+      <select value={channel} onChange={e => setChannel(e.target.value)} style={{background:'#111', color:'#00ff41', border:'1px solid #00ff41', marginBottom:5}}>
+        <option value="global">Global</option>
+        {player?.clan && <option value="clan">Clan</option>}
+      </select>
+      <div className="chat-messages">
+        {messages.map(msg => (
+          <p key={msg.id}><strong style={{color: msg.uid === player?.uid ? '#ffcc00' : '#00ff41'}}>{msg.user}:</strong> {msg.text}</p>
+        ))}
+      </div>
+      <div className="chat-input">
+        <input value={input} onChange={e => setInput(e.target.value)} placeholder="Escribe... (/roll)" onKeyDown={e => e.key === 'Enter' && sendMessage()} />
+        <button onClick={sendMessage}>Enviar</button>
+      </div>
+    </div>
+  );
+}
+CHATEOF
+
+cat > src/components/Clan.jsx << 'CLANEOF'
+'use client';
+import React, { useState, useEffect, useContext } from 'react';
+import { GameContext } from '../context/GameContext';
+import { db } from '../firebase';
+import { collection, addDoc, onSnapshot, doc, updateDoc, increment, arrayUnion, arrayRemove, query, where } from 'firebase/firestore';
+
+export default function Clan() {
+  const { player, updatePlayer } = useContext(GameContext);
+  const [clan, setClan] = useState(null);
+  const [clanesDisponibles, setClanesDisponibles] = useState([]);
+  const [nombreNuevoClan, setNombreNuevoClan] = useState('');
+  const [depositAmount, setDepositAmount] = useState(0);
+  const [withdrawAmount, setWithdrawAmount] = useState(0);
+
+  useEffect(() => {
+    if (!player || !player.clan) { setClan(null); return; }
+    const unsub = onSnapshot(doc(db, 'clanes', player.clan), (snap) => { if (snap.exists()) setClan({ id: snap.id, ...snap.data() }); });
+    return () => unsub();
+  }, [player?.clan]);
+
+  useEffect(() => {
+    const q = query(collection(db, 'clanes'), where('publico', '==', true));
+    const unsub = onSnapshot(q, (snap) => setClanesDisponibles(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
+    return () => unsub();
+  }, []);
+
+  const crearClan = async () => {
+    if (!nombreNuevoClan.trim() || !player) return;
+    const nuevoClan = { name: nombreNuevoClan, leader: player.uid, members: [player.uid], bank: 0, defense: 10, publico: true, createdAt: Date.now() };
+    const docRef = await addDoc(collection(db, 'clanes'), nuevoClan);
+    await updatePlayer({ clan: docRef.id });
+    setNombreNuevoClan('');
+  };
+
+  const unirseAClan = async (clanId) => {
+    if (!player || player.clan) return;
+    await updatePlayer({ clan: clanId });
+    await updateDoc(doc(db, 'clanes', clanId), { members: arrayUnion(player.uid) });
+  };
+
+  const salirDelClan = async () => {
+    if (!player || !player.clan) return;
+    const oldClanId = player.clan;
+    await updatePlayer({ clan: null });
+    await updateDoc(doc(db, 'clanes', oldClanId), { members: arrayRemove(player.uid) });
+  };
+
+  const depositar = async () => {
+    if (depositAmount <= 0 || depositAmount > player.credits) return;
+    await updateDoc(doc(db, 'clanes', player.clan), { bank: increment(depositAmount) });
+    await updatePlayer({ credits: increment(-depositAmount) });
+    setDepositAmount(0);
+  };
+
+  const retirar = async () => {
+    if (withdrawAmount <= 0 || withdrawAmount > clan.bank) return;
+    if (player.uid !== clan.leader) return;
+    await updateDoc(doc(db, 'clanes', player.clan), { bank: increment(-withdrawAmount) });
+    await updatePlayer({ credits: increment(withdrawAmount) });
+    setWithdrawAmount(0);
+  };
+
+  const mejorarDefensa = async () => {
+    if (!clan) return;
+    const costo = clan.defense * 10;
+    if (clan.bank < costo) return;
+    await updateDoc(doc(db, 'clanes', player.clan), { defense: increment(5), bank: increment(-costo) });
+  };
+
+  return (
+    <div className="panel">
+      <h2>🏴 Clan</h2>
+      {clan ? (
+        <div>
+          <h3>{clan.name}</h3>
+          <p>Líder: {clan.leader === player.uid ? 'Tú' : clan.leader.slice(0,6)+'...'}</p>
+          <p>Miembros: {clan.members.length}</p>
+          <p>Banco: 💰 {clan.bank}</p>
+          <p>Defensa: 🛡️ {clan.defense}</p>
+          <input type="number" value={depositAmount} onChange={e => setDepositAmount(Number(e.target.value))} placeholder="Depositar" />
+          <button onClick={depositar}>Depositar</button>
+          {player.uid === clan.leader && (
+            <><input type="number" value={withdrawAmount} onChange={e => setWithdrawAmount(Number(e.target.value))} placeholder="Retirar" /><button onClick={retirar}>Retirar</button></>
+          )}
+          <button onClick={mejorarDefensa} disabled={clan.bank < clan.defense * 10}>Mejorar defensa ({clan.defense*10})</button>
+          <button onClick={salirDelClan} style={{background:'#ff0040',color:'#fff',marginTop:10}}>Abandonar clan</button>
+        </div>
+      ) : (
+        <div>
+          <p>No perteneces a ningún clan.</p>
+          <input value={nombreNuevoClan} onChange={e => setNombreNuevoClan(e.target.value)} placeholder="Nombre del nuevo clan" />
+          <button onClick={crearClan} style={{width:'100%'}}>Crear clan</button>
+          <h3>Clanes disponibles</h3>
+          {clanesDisponibles.filter(c => !c.members.includes(player?.uid)).map(c => (
+            <div key={c.id} style={{display:'flex',justifyContent:'space-between',marginBottom:5}}>
+              <span>{c.name} ({c.members.length} miembros)</span>
+              <button onClick={() => unirseAClan(c.id)}>Unirse</button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+CLANEOF
+
+cat > src/components/Misiones.jsx << 'MISIONESEOF'
+'use client';
+import React, { useState, useEffect, useContext } from 'react';
+import { GameContext } from '../context/GameContext';
+import { db } from '../firebase';
+import { collection, onSnapshot, doc, updateDoc, increment } from 'firebase/firestore';
+
+export default function Misiones() {
+  const { player, updatePlayer } = useContext(GameContext);
+  const [misiones, setMisiones] = useState([]);
+  const [progreso, setProgreso] = useState({});
+
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, 'misiones'), (snap) => setMisiones(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
+    return () => unsub();
+  }, []);
+
+  useEffect(() => {
+    if (!player) return;
+    const unsub = onSnapshot(doc(db, 'progreso_misiones', player.uid), (snap) => {
+      if (snap.exists()) setProgreso(snap.data());
+      else updateDoc(doc(db, 'progreso_misiones', player.uid), {}).catch(() => {});
+    });
+    return () => unsub();
+  }, [player?.uid]);
+
+  const avanzar = async (misionId) => {
+    if (!player) return;
+    const mision = misiones.find(m => m.id === misionId);
+    if (!mision) return;
+    const actual = progreso[misionId]?.progreso || 0;
+    const nuevo = actual + 1;
+    if (nuevo >= mision.objetivo) {
+      await updateDoc(doc(db, 'progreso_misiones', player.uid), { [`${misionId}.progreso`]: mision.objetivo, [`${misionId}.completada`]: true });
+      await updatePlayer({ xp: increment(mision.recompensa.xp), credits: increment(mision.recompensa.credits) });
+    } else {
+      await updateDoc(doc(db, 'progreso_misiones', player.uid), { [`${misionId}.progreso`]: nuevo });
+    }
+  };
+
+  return (
+    <div className="panel">
+      <h2>📋 Misiones</h2>
+      {misiones.map(m => {
+        const prog = progreso[m.id]?.progreso || 0;
+        const completada = progreso[m.id]?.completada || false;
+        return (
+          <div key={m.id} style={{marginBottom:15, borderLeft:'3px solid #00ff41', paddingLeft:10}}>
+            <h3>{m.nombre}</h3>
+            <p>{m.descripcion}</p>
+            <p>Progreso: {prog}/{m.objetivo}</p>
+            <p>Recompensa: +{m.recompensa.xp} XP, +{m.recompensa.credits} créditos</p>
+            <button onClick={() => avanzar(m.id)} disabled={completada}>{completada ? '✅ Completada' : 'Avanzar (+1)'}</button>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+MISIONESEOF
+
+cat > src/components/Mapa.jsx << 'MAPAEOF'
+'use client';
+import React, { useState, useEffect, useContext } from 'react';
+import { GameContext } from '../context/GameContext';
+import { db } from '../firebase';
+import { collection, onSnapshot, doc, updateDoc } from 'firebase/firestore';
+import HackingGame from './HackingGame';
+
+export default function Mapa() {
+  const { player } = useContext(GameContext);
+  const [nodos, setNodos] = useState([]);
+  const [selectedNodo, setSelectedNodo] = useState(null);
+  const [mostrarJuego, setMostrarJuego] = useState(false);
+
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, 'nodos'), (snap) => setNodos(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
+    return () => unsub();
+  }, []);
+
+  const handleNodoClick = (nodo) => { if (!player || mostrarJuego) return; setSelectedNodo(nodo); setMostrarJuego(true); };
+  const handleWin = async () => { if (!selectedNodo || !player || !player.clan) return; await updateDoc(doc(db, 'nodos', selectedNodo.id), { propietario: player.clan }); setMostrarJuego(false); setSelectedNodo(null); };
+  const handleFail = () => { setMostrarJuego(false); setSelectedNodo(null); };
+
+  return (
+    <div className="panel">
+      <h2>🗺️ Mapa de la Red</h2>
+      {mostrarJuego && selectedNodo ? (
+        <HackingGame nodo={selectedNodo} onComplete={handleWin} onFail={handleFail} />
+      ) : (
+        <div style={{display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:10}}>
+          {nodos.map(nodo => (
+            <div key={nodo.id} onClick={() => handleNodoClick(nodo)} style={{
+              border: '1px solid #00ff41', padding: 10,
+              background: nodo.propietario === player?.clan ? 'rgba(0,255,65,0.2)' : 'rgba(0,0,0,0.3)',
+              cursor: 'pointer'
+            }}>
+              <h4>{nodo.nombre}</h4>
+              <p>💀 Seguridad: {nodo.seguridad}</p>
+              <p>💰 Valor: {nodo.valor}</p>
+              <p>Dueño: {nodo.propietario ? nodo.propietario.slice(0,6)+'...
