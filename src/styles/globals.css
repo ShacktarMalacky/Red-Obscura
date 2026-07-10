@@ -1,0 +1,229 @@
+/* Global Styles */
+:root {
+  --primary-color: #00ff41;
+  --dark-bg: #0a0e27;
+  --secondary-bg: #16213e;
+  --accent-red: #ff1744;
+  --text-color: #00ff41;
+  --border-color: #00ff41;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  background: linear-gradient(135deg, #0a0e27 0%, #16213e 50%, #0f3460 100%);
+  color: var(--text-color);
+  font-family: 'Courier New', 'Courier', monospace;
+  background-attachment: fixed;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+#__next {
+  min-height: 100vh;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--primary-color);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #00ff65;
+}
+
+/* Inputs */
+input,
+textarea,
+select {
+  background: rgba(0, 0, 0, 0.5);
+  color: var(--text-color);
+  border: 1px solid var(--border-color);
+  padding: 10px;
+  border-radius: 5px;
+  font-family: 'Courier New', monospace;
+  font-size: 14px;
+  transition: all 0.3s;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  outline: none;
+  border-color: #00ff65;
+  box-shadow: 0 0 10px rgba(0, 255, 65, 0.3);
+  background: rgba(0, 0, 0, 0.7);
+}
+
+input::placeholder {
+  color: rgba(0, 255, 65, 0.5);
+}
+
+/* Buttons */
+button {
+  background: var(--primary-color);
+  color: #000;
+  border: none;
+  padding: 10px 15px;
+  border-radius: 5px;
+  font-family: 'Courier New', monospace;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.3s;
+  font-size: 14px;
+}
+
+button:hover {
+  background: #00ff65;
+  box-shadow: 0 0 10px rgba(0, 255, 65, 0.5);
+  transform: translateY(-2px);
+}
+
+button:active {
+  transform: translateY(0);
+}
+
+button:disabled {
+  background: #666;
+  color: #999;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+/* Containers */
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.card {
+  background: rgba(22, 33, 62, 0.8);
+  border: 2px solid var(--primary-color);
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 15px;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 8px 32px rgba(0, 255, 65, 0.1);
+}
+
+.card:hover {
+  border-color: #00ff65;
+  box-shadow: 0 8px 32px rgba(0, 255, 65, 0.2);
+}
+
+/* Grid */
+.grid {
+  display: grid;
+  gap: 15px;
+}
+
+.grid-2 {
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+}
+
+.grid-3 {
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+}
+
+.grid-4 {
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+
+/* Headers */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  color: var(--accent-red);
+  margin-bottom: 10px;
+  text-shadow: 0 0 10px rgba(255, 23, 68, 0.5);
+}
+
+h1 {
+  font-size: 32px;
+}
+
+h2 {
+  font-size: 24px;
+}
+
+h3 {
+  font-size: 18px;
+}
+
+/* Progress Bar */
+.progress-bar {
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 4px;
+  height: 8px;
+  overflow: hidden;
+  margin: 5px 0;
+}
+
+.progress-bar-fill {
+  background: var(--primary-color);
+  height: 100%;
+  transition: width 0.3s;
+  box-shadow: 0 0 10px var(--primary-color);
+}
+
+/* Animations */
+@keyframes glow {
+  0% { text-shadow: 0 0 5px var(--primary-color); }
+  50% { text-shadow: 0 0 20px var(--primary-color); }
+  100% { text-shadow: 0 0 5px var(--primary-color); }
+}
+
+@keyframes pulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.7; }
+  100% { opacity: 1; }
+}
+
+@keyframes slide-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.glow { animation: glow 2s infinite; }
+.pulse { animation: pulse 2s infinite; }
+.slide-in { animation: slide-in 0.3s ease-out; }
+
+/* Status Colors */
+.status-online { color: var(--primary-color); }
+.status-offline { color: #ff9800; }
+.status-error { color: var(--accent-red); }
+.status-warning { color: #ffeb3b; }
+
+/* Responsive */
+@media (max-width: 768px) {
+  .grid-2 { grid-template-columns: 1fr; }
+  .grid-3 { grid-template-columns: repeat(2, 1fr); }
+  .grid-4 { grid-template-columns: repeat(2, 1fr); }
+  h1 { font-size: 24px; }
+  .container { padding: 10px; }
+}
+
+@media (max-width: 480px) {
+  .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+  h1 { font-size: 20px; }
+  button { padding: 8px 12px; font-size: 12px; }
+}
