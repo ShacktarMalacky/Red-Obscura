@@ -10,6 +10,7 @@ export default function Login() {
   const [error, setError] = useState('');
   const [resetEmail, setResetEmail] = useState('');
   const [showReset, setShowReset] = useState(false);
+  const [showFirebaseConfig, setShowFirebaseConfig] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -31,7 +32,24 @@ export default function Login() {
   return (
     <div className="login-container">
       <h1 className="neon-text">🔴 RED OSCURA</h1>
-      {showReset ? (
+      {showFirebaseConfig ? (
+        <section className="firebase-config" aria-labelledby="firebase-config-title">
+          <h2 id="firebase-config-title">Configurar Firebase</h2>
+          <p>Agrega estas variables en la configuración del proyecto:</p>
+          <ul>
+            <li>NEXT_PUBLIC_FIREBASE_API_KEY</li>
+            <li>NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN</li>
+            <li>NEXT_PUBLIC_FIREBASE_PROJECT_ID</li>
+            <li>NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET</li>
+            <li>NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID</li>
+            <li>NEXT_PUBLIC_FIREBASE_APP_ID</li>
+          </ul>
+          <a href="https://console.firebase.google.com/" target="_blank" rel="noreferrer">
+            Abrir consola de Firebase
+          </a>
+          <button type="button" onClick={() => setShowFirebaseConfig(false)}>Volver</button>
+        </section>
+      ) : showReset ? (
         <div>
           <input value={resetEmail} onChange={e => setResetEmail(e.target.value)} placeholder="Email" />
           <button onClick={handleReset}>Enviar recuperación</button>
@@ -42,6 +60,9 @@ export default function Login() {
           <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="Email" required />
           <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Contraseña" required />
           <button type="submit">{isRegister ? 'Registrarse' : 'Iniciar sesión'}</button>
+          <button type="button" onClick={() => setShowFirebaseConfig(true)}>
+            Configurar Firebase
+          </button>
           <p className="toggle-auth" onClick={() => setIsRegister(!isRegister)}>
             {isRegister ? '¿Ya tienes cuenta? Inicia sesión' : '¿No tienes cuenta? Regístrate'}
           </p>

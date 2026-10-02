@@ -4,4 +4,4 @@ const nextConfig = {
   // Next.js 16 lo detecta automáticamente.
 };
 
-module.exports = nextConfig;
+export default nextConfig;
