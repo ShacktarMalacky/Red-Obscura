@@ -12,11 +12,22 @@ export function GameProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let unsubPlayer = null;
     const unsubAuth = onAuthStateChanged(auth, (firebaseUser) => {
+      if (unsubPlayer) {
+        unsubPlayer();
+        unsubPlayer = null;
+      }
+
       if (firebaseUser) {
         setUser(firebaseUser);
-        if (!firebaseUser.emailVerified) sendEmailVerification(firebaseUser);
-        const unsubPlayer = onSnapshot(doc(db, 'jugadores', firebaseUser.uid), (snap) => {
+        setPlayer(null);
+        if (!firebaseUser.emailVerified) {
+          sendEmailVerification(firebaseUser).catch((error) => {
+            console.error('Error al enviar verificación de correo:', error);
+          });
+        }
+        unsubPlayer = onSnapshot(doc(db, 'jugadores', firebaseUser.uid), (snap) => {
           if (snap.exists()) setPlayer(snap.data());
           else {
             const newPlayer = {
@@ -33,15 +44,16 @@ export function GameProvider({ children }) {
             setDoc(doc(db, 'jugadores', firebaseUser.uid), newPlayer).then(() => setPlayer(newPlayer));
           }
         });
-        setLoading(false);
-        return () => unsubPlayer();
       } else {
         setUser(null);
         setPlayer(null);
-        setLoading(false);
       }
+      setLoading(false);
     });
-    return () => unsubAuth();
+    return () => {
+      unsubAuth();
+      if (unsubPlayer) unsubPlayer();
+    };
   }, []);
 
   // Minería automática (solo en el cliente)
