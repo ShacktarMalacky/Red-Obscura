@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { GameContext } from '../context/GameContext';
 import { db } from '../firebase';
-import { collection, addDoc, onSnapshot, query, orderBy, limit, where } from 'firebase/firestore';
+import { collection, addDoc, onSnapshot, query, orderBy, limitToLast, where } from 'firebase/firestore';
 
 export default function Chat() {
   const { player } = useContext(GameContext);
@@ -12,9 +12,9 @@ export default function Chat() {
 
   useEffect(() => {
     let q;
-    if (channel === 'global') q = query(collection(db, 'mensajes'), where('channel', '==', 'global'), orderBy('timestamp', 'asc'), limit(50));
-    else if (channel === 'clan' && player?.clan) q = query(collection(db, 'mensajes'), where('channel', '==', `clan_${player.clan}`), orderBy('timestamp', 'asc'), limit(50));
-    else q = query(collection(db, 'mensajes'), where('channel', '==', 'global'), orderBy('timestamp', 'asc'), limit(50));
+    if (channel === 'global') q = query(collection(db, 'mensajes'), where('channel', '==', 'global'), orderBy('timestamp', 'asc'), limitToLast(50));
+    else if (channel === 'clan' && player?.clan) q = query(collection(db, 'mensajes'), where('channel', '==', `clan_${player.clan}`), orderBy('timestamp', 'asc'), limitToLast(50));
+    else q = query(collection(db, 'mensajes'), where('channel', '==', 'global'), orderBy('timestamp', 'asc'), limitToLast(50));
     const unsub = onSnapshot(q, (snap) => setMessages(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
     return () => unsub();
   }, [channel, player?.clan]);
