@@ -1,7 +1,11 @@
 'use client';
 import React, { useState } from 'react';
-import { auth } from '../firebase';
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
+import { auth, isFirebaseConfigured } from '../firebase';
+import {
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  sendPasswordResetEmail,
+} from 'firebase/auth';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -12,21 +16,37 @@ export default function Login() {
   const [showReset, setShowReset] = useState(false);
   const [showFirebaseConfig, setShowFirebaseConfig] = useState(false);
 
+  const ensureFirebaseReady = () => {
+    if (!auth || !isFirebaseConfigured) {
+      setError('Firebase no está configurado. Añade las variables NEXT_PUBLIC_FIREBASE_* en .env.local.');
+      return false;
+    }
+    return true;
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!ensureFirebaseReady()) return;
+
     try {
       if (isRegister) await createUserWithEmailAndPassword(auth, email, password);
       else await signInWithEmailAndPassword(auth, email, password);
-    } catch (err) { setError(err.message); }
+    } catch (err) {
+      setError(err.message || 'Error al autenticar con Firebase.');
+    }
   };
 
   const handleReset = async () => {
     if (!resetEmail.trim()) return;
+    if (!ensureFirebaseReady()) return;
+
     try {
       await sendPasswordResetEmail(auth, resetEmail);
       setShowReset(false);
       setError('Correo de recuperación enviado.');
-    } catch (err) { setError(err.message); }
+    } catch (err) {
+      setError(err.message || 'No se pudo enviar el correo de recuperación.');
+    }
   };
 
   return (
@@ -53,20 +73,23 @@ export default function Login() {
         <div>
           <input value={resetEmail} onChange={e => setResetEmail(e.target.value)} placeholder="Email" />
           <button onClick={handleReset}>Enviar recuperación</button>
-          <p onClick={() => setShowReset(false)} style={{cursor:'pointer', color:'#00ff41'}}>Volver</p>
+          <p onClick={() => setShowReset(false)} style={{ cursor: 'pointer', color: '#00ff41' }}>Volver</p>
         </div>
       ) : (
         <form onSubmit={handleSubmit}>
           <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="Email" required />
           <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Contraseña" required />
-          <button type="submit">{isRegister ? 'Registrarse' : 'Iniciar sesión'}</button>
+          <button type="submit" disabled={!isFirebaseConfigured}>{isRegister ? 'Registrarse' : 'Iniciar sesión'}</button>
           <button type="button" onClick={() => setShowFirebaseConfig(true)}>
             Configurar Firebase
           </button>
           <p className="toggle-auth" onClick={() => setIsRegister(!isRegister)}>
             {isRegister ? '¿Ya tienes cuenta? Inicia sesión' : '¿No tienes cuenta? Regístrate'}
           </p>
-          <p onClick={() => setShowReset(true)} style={{cursor:'pointer', color:'#00ff41'}}>¿Olvidaste tu contraseña?</p>
+          <p onClick={() => setShowReset(true)} style={{ cursor: 'pointer', color: '#00ff41' }}>¿Olvidaste tu contraseña?</p>
+          {!isFirebaseConfigured && (
+            <p className="error">Configura tu proyecto de Firebase antes de continuar.</p>
+          )}
           {error && <p className="error">{error}</p>}
         </form>
       )}
