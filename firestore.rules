@@ -10,6 +10,12 @@ service cloud.firestore {
       return signedIn() && request.auth.uid == playerId;
     }
 
+    function isClanMember(clanId) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/clanes/$(clanId))
+        && request.auth.uid in get(/databases/$(database)/documents/clanes/$(clanId)).data.members;
+    }
+
 
 
     // All game-state writes run through authenticated Cloud Functions (Admin
@@ -25,9 +31,11 @@ service cloud.firestore {
     }
 
     match /mensajes/{messageId} {
-      // Chat was already readable to any signed-in account in the prior app.
-      // Keep that compatibility; message creation is server-mediated.
-      allow read: if signedIn();
+      allow read: if signedIn()
+        && (resource.data.channel == 'global'
+          || (resource.data.channel is string
+            && resource.data.channel.matches('clan_[A-Za-z0-9_-]{1,128}')
+            && isClanMember(resource.data.channel.replace('clan_', ''))));
       allow write: if false;
     }
 

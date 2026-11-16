@@ -159,7 +159,6 @@ export const claimNode = onCall(async (request) => {
       throw new HttpsError("failed-precondition", "La configuración del nodo no es válida.");
     }
     if (node.owner === uid) throw new HttpsError("failed-precondition", "Ya controlas este nodo.");
-    if (node.owner) throw new HttpsError("failed-precondition", "Este nodo ya está controlado por otro jugador.");
     const defense = Number(node.defense);
     const cost = defense * 5;
     const credits = Number(player.credits || 0);
@@ -378,7 +377,7 @@ export const leaveClan = onCall(async (request) => {
 export const depositClan = onCall(async (request) => {
   const uid = uidFrom(request);
   const amount = request.data?.amount;
-  if (!finitePositive(amount) || amount > 1000000) throw new HttpsError("invalid-argument", "La cantidad no es válida.");
+  if (!finitePositive(amount) || !Number.isInteger(amount) || amount > 1000000) throw new HttpsError("invalid-argument", "La cantidad debe ser un entero positivo.");
   const userRef = playerRef(uid);
   await db.runTransaction(async (transaction) => {
     const userSnap = await transaction.get(userRef);
@@ -400,7 +399,7 @@ export const depositClan = onCall(async (request) => {
 export const withdrawClan = onCall(async (request) => {
   const uid = uidFrom(request);
   const amount = request.data?.amount;
-  if (!finitePositive(amount) || amount > 1000000) throw new HttpsError("invalid-argument", "La cantidad no es válida.");
+  if (!finitePositive(amount) || !Number.isInteger(amount) || amount > 1000000) throw new HttpsError("invalid-argument", "La cantidad debe ser un entero positivo.");
   const userRef = playerRef(uid);
   await db.runTransaction(async (transaction) => {
     const userSnap = await transaction.get(userRef);

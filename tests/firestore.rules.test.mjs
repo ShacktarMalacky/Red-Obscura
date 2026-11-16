@@ -2,7 +2,7 @@ import {after, before, test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {initializeTestEnvironment, assertFails, assertSucceeds} from '@firebase/rules-unit-testing';
-import {collection, doc, getDoc, getDocs, setDoc, updateDoc} from 'firebase/firestore';
+import {collection, doc, getDoc, getDocs, query, where, setDoc, updateDoc} from 'firebase/firestore';
 
 const projectId = 'red-obscura-rules-test';
 let env;
@@ -44,7 +44,9 @@ test('authenticated players can read public game collections but cannot forge ec
   await assertSucceeds(getDocs(collection(db, 'jugadores_publicos')));
   await assertFails(getDocs(collection(db, 'jugadores')));
   await assertSucceeds(getDocs(collection(db, 'misiones')));
-  await assertSucceeds(getDocs(collection(db, 'mensajes')));
+  await assertFails(getDocs(collection(db, 'mensajes')));
+  await assertSucceeds(getDocs(query(collection(db, 'mensajes'), where('channel', '==', 'global'))));
+  await assertSucceeds(getDocs(query(collection(db, 'mensajes'), where('channel', '==', 'clan_clan1'))));
   await assertSucceeds(getDoc(doc(db, 'jugadores', 'alice')));
   await assertFails(updateDoc(doc(db, 'jugadores', 'alice'), {credits: 999999}));
   await assertFails(setDoc(doc(db, 'nodos', 'nodo-alfa'), {owner: 'alice'}));
@@ -56,9 +58,11 @@ test('mission progress is private to its owner', async () => {
   const alice = env.authenticatedContext('alice').firestore();
   const bob = env.authenticatedContext('bob').firestore();
   await assertSucceeds(getDoc(doc(alice, 'progreso_misiones', 'alice')));
+  await assertSucceeds(getDoc(doc(alice, 'mensajes', 'clan1')));
   await assertSucceeds(getDoc(doc(alice, 'jugadores', 'alice')));
   await assertFails(getDoc(doc(alice, 'jugadores', 'bob')));
   await assertFails(getDoc(doc(bob, 'progreso_misiones', 'alice')));
+  await assertFails(getDoc(doc(bob, 'mensajes', 'clan1')));
 });
 
 test('game-state collections reject all direct client message writes', async () => {
