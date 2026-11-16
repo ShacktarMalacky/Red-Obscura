@@ -1,11 +1,10 @@
 'use client';
 import React, { useContext, useState } from 'react';
 import { GameContext } from '../context/GameContext';
-import { doc, updateDoc, increment } from 'firebase/firestore';
-import { db } from '../firebase';
+import { upgradeScript as upgradeScriptAction } from '../gameActions';
 
 export default function ScriptUpgrade() {
-  const { player, updatePlayer } = useContext(GameContext);
+  const { player } = useContext(GameContext);
   const [selectedScript, setSelectedScript] = useState('mineria');
   const [loading, setLoading] = useState(false);
 
@@ -39,14 +38,12 @@ export default function ScriptUpgrade() {
     
     setLoading(true);
     try {
-      await updateDoc(doc(db, 'jugadores', player.uid), {
-        [`scripts.${selectedScript}.level`]: increment(1),
-        credits: increment(-upgradeCost)
-      });
+      await upgradeScriptAction(selectedScript);
     } catch (err) {
       console.error('Error al mejorar script:', err);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   if (!player) return null;

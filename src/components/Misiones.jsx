@@ -2,10 +2,11 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { GameContext } from '../context/GameContext';
 import { db } from '../firebase';
-import { collection, onSnapshot, doc, updateDoc, increment } from 'firebase/firestore';
+import {collection, onSnapshot, doc} from 'firebase/firestore';
+import {advanceMission} from '../gameActions';
 
 export default function Misiones() {
-  const { player, updatePlayer } = useContext(GameContext);
+  const {player} = useContext(GameContext);
   const [misiones, setMisiones] = useState([]);
   const [progreso, setProgreso] = useState({});
 
@@ -18,22 +19,18 @@ export default function Misiones() {
     if (!player) return;
     const unsub = onSnapshot(doc(db, 'progreso_misiones', player.uid), (snap) => {
       if (snap.exists()) setProgreso(snap.data());
-      else updateDoc(doc(db, 'progreso_misiones', player.uid), {}).catch(() => {});
+      else setProgreso({});
     });
     return () => unsub();
   }, [player?.uid]);
 
   const avanzar = async (misionId) => {
     if (!player) return;
-    const mision = misiones.find(m => m.id === misionId);
-    if (!mision) return;
-    const actual = progreso[misionId]?.progreso || 0;
-    const nuevo = actual + 1;
-    if (nuevo >= mision.objetivo) {
-      await updateDoc(doc(db, 'progreso_misiones', player.uid), { [`${misionId}.progreso`]: mision.objetivo, [`${misionId}.completada`]: true });
-      await updatePlayer({ xp: increment(mision.recompensa.xp), credits: increment(mision.recompensa.credits) });
-    } else {
-      await updateDoc(doc(db, 'progreso_misiones', player.uid), { [`${misionId}.progreso`]: nuevo });
+    try {
+      const result = await advanceMission(misionId);
+      setProgreso((current) => ({...current, [misionId]: {progreso: result.progress, completada: result.completed}}));
+    } catch (error) {
+      console.error('Error al avanzar misión:', error);
     }
   };
 

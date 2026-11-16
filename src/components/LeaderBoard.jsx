@@ -10,12 +10,13 @@ export default function LeaderBoard() {
 
   useEffect(() => {
     let queryConstraints = [orderBy(sortBy, 'desc'), limit(10)];
-    const q = query(collection(db, 'jugadores'), ...queryConstraints);
+    const q = query(collection(db, 'jugadores_publicos'), ...queryConstraints);
     
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      setPlayers(snapshot.docs.map((doc, idx) => ({
+      setPlayers(snapshot.docs.map((playerDoc, idx) => ({
         rank: idx + 1,
-        ...doc.data()
+        uid: playerDoc.id,
+        ...playerDoc.data(),
       })));
       setLoading(false);
     });

@@ -2,15 +2,8 @@
 import React, { createContext, useState, useEffect } from 'react';
 import { auth, db, isFirebaseConfigured } from '../firebase';
 import { onAuthStateChanged, sendEmailVerification } from 'firebase/auth';
-import {
-  doc,
-  onSnapshot,
-  setDoc,
-  updateDoc,
-  increment,
-  collection,
-  addDoc,
-} from 'firebase/firestore';
+import {doc, onSnapshot} from 'firebase/firestore';
+import {ensurePlayer, mine} from '../gameActions';
 
 export const GameContext = createContext();
 
@@ -44,28 +37,12 @@ export function GameProvider({ children }) {
           });
         }
 
+        ensurePlayer().catch((error) => {
+          console.error('Error al inicializar el perfil:', error);
+        });
+
         unsubPlayer = onSnapshot(doc(db, 'jugadores', firebaseUser.uid), (snap) => {
-          if (snap.exists()) {
-            setPlayer(snap.data());
-            return;
-          }
-
-          const newPlayer = {
-            uid: firebaseUser.uid,
-            username: `Hacker_${Math.floor(Math.random() * 10000)}`,
-            level: 1,
-            xp: 0,
-            credits: 100,
-            clan: null,
-            scripts: {
-              mineria: { level: 1, active: true },
-              defensa: { level: 0, active: false },
-              ataque: { level: 0, active: false },
-            },
-            createdAt: Date.now(),
-          };
-
-          setDoc(doc(db, 'jugadores', firebaseUser.uid), newPlayer).then(() => setPlayer(newPlayer));
+          if (snap.exists()) setPlayer(snap.data());
         });
       } else {
         setUser(null);
@@ -82,38 +59,23 @@ export function GameProvider({ children }) {
   }, []);
 
   useEffect(() => {
-    if (!player || !db) return undefined;
+    if (!player || !db || player.scripts?.mineria?.active !== true) return undefined;
 
-    const interval = setInterval(async () => {
-      const nivel = player.scripts?.mineria?.level || 1;
-      const activo = player.scripts?.mineria?.active;
-
-      if (!activo) return;
-
-      await updateDoc(doc(db, 'jugadores', player.uid), {
-        xp: increment(1 * nivel),
-        credits: increment(2 * nivel),
-      });
-
-      await addDoc(collection(db, 'mensajes'), {
-        channel: 'global',
-        user: 'Sistema',
-        text: `${player.username} ha minado datos (+${nivel} XP, +${2 * nivel} créditos).`,
-        timestamp: Date.now(),
-        uid: 'sistema',
+    const interval = setInterval(() => {
+      mine().catch((error) => {
+        if (error?.code !== 'functions/resource-exhausted') {
+          console.error('Error de minería:', error);
+        }
       });
     }, 10000);
 
     return () => clearInterval(interval);
-  }, [player?.scripts?.mineria?.active, player?.scripts?.mineria?.level, player?.uid]);
+  }, [player?.scripts?.mineria?.active, player?.uid]);
 
-  const updatePlayer = async (updates) => {
-    if (!user || !db) return;
-    await updateDoc(doc(db, 'jugadores', user.uid), updates);
-  };
+
 
   return (
-    <GameContext.Provider value={{ user, player, loading, updatePlayer }}>
+    <GameContext.Provider value={{ user, player, loading }}>
       {children}
     </GameContext.Provider>
   );

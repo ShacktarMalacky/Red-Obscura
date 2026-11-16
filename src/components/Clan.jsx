@@ -2,10 +2,11 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { GameContext } from '../context/GameContext';
 import { db } from '../firebase';
-import { collection, addDoc, onSnapshot, doc, updateDoc, increment, arrayUnion, arrayRemove, query, where } from 'firebase/firestore';
+import {collection, onSnapshot, doc, query, where} from 'firebase/firestore';
+import {createClan, joinClan, leaveClan, depositClan, withdrawClan, upgradeClanDefense} from '../gameActions';
 
 export default function Clan() {
-  const { player, updatePlayer } = useContext(GameContext);
+  const {player} = useContext(GameContext);
   const [clan, setClan] = useState(null);
   const [clanesDisponibles, setClanesDisponibles] = useState([]);
   const [nombreNuevoClan, setNombreNuevoClan] = useState('');
@@ -26,37 +27,29 @@ export default function Clan() {
 
   const crearClan = async () => {
     if (!nombreNuevoClan.trim() || !player) return;
-    const nuevoClan = { name: nombreNuevoClan, leader: player.uid, members: [player.uid], bank: 0, defense: 10, publico: true, createdAt: Date.now() };
-    const docRef = await addDoc(collection(db, 'clanes'), nuevoClan);
-    await updatePlayer({ clan: docRef.id });
+    await createClan(nombreNuevoClan.trim());
     setNombreNuevoClan('');
   };
 
   const unirseAClan = async (clanId) => {
     if (!player || player.clan) return;
-    await updatePlayer({ clan: clanId });
-    await updateDoc(doc(db, 'clanes', clanId), { members: arrayUnion(player.uid) });
+    await joinClan(clanId);
   };
 
   const salirDelClan = async () => {
     if (!player || !player.clan) return;
-    const oldClanId = player.clan;
-    await updatePlayer({ clan: null });
-    await updateDoc(doc(db, 'clanes', oldClanId), { members: arrayRemove(player.uid) });
+    await leaveClan();
   };
 
   const depositar = async () => {
-    if (depositAmount <= 0 || depositAmount > player.credits) return;
-    await updateDoc(doc(db, 'clanes', player.clan), { bank: increment(depositAmount) });
-    await updatePlayer({ credits: increment(-depositAmount) });
+    if (!player || depositAmount <= 0) return;
+    await depositClan(depositAmount);
     setDepositAmount(0);
   };
 
   const retirar = async () => {
-    if (withdrawAmount <= 0 || withdrawAmount > clan.bank) return;
-    if (player.uid !== clan.leader) return;
-    await updateDoc(doc(db, 'clanes', player.clan), { bank: increment(-withdrawAmount) });
-    await updatePlayer({ credits: increment(withdrawAmount) });
+    if (!clan || withdrawAmount <= 0 || player.uid !== clan.leader) return;
+    await withdrawClan(withdrawAmount);
     setWithdrawAmount(0);
   };
 
@@ -64,7 +57,7 @@ export default function Clan() {
     if (!clan) return;
     const costo = clan.defense * 10;
     if (clan.bank < costo) return;
-    await updateDoc(doc(db, 'clanes', player.clan), { defense: increment(5), bank: increment(-costo) });
+    await upgradeClanDefense();
   };
 
   return (
