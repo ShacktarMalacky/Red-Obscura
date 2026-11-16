@@ -10,7 +10,9 @@
     "start": "npm run shell",
     "deploy": "firebase deploy --only functions",
     "logs": "firebase functions:log",
-    "test:rules": "node --test ../tests/firestore.rules.test.mjs"
+    "test:rules": "node --test ../tests/firestore.rules.test.mjs",
+    "test:integration": "node --test test/integration.test.mjs",
+    "migrate:legacy-data": "node scripts/migrate-legacy-data.mjs"
   },
   "name": "functions",
   "engines": {

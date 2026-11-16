@@ -32,4 +32,4 @@ jobs:
       - run: npm install --prefix functions
       - run: npm run build --prefix functions
       - run: npm install --no-save --legacy-peer-deps @firebase/rules-unit-testing firebase-tools
-      - run: npx firebase emulators:exec --only firestore --project red-obscura-rules-test 'node --test tests/firestore.rules.test.mjs'
+      - run: npx firebase emulators:exec --only firestore,auth,functions --project red-obscura-rules-test 'node --test tests/firestore.rules.test.mjs && npm run test:integration --prefix functions'

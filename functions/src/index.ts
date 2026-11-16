@@ -31,6 +31,51 @@ function finitePositive(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value) && value > 0;
 }
 
+type MissionEventState = {
+  progressRef: FirebaseFirestore.DocumentReference;
+  updates: Record<string, {progreso: number; completada: boolean; accionesVerificadas: number}>;
+  rewardXp: number;
+  rewardCredits: number;
+};
+
+async function planMissionEvent(
+  transaction: FirebaseFirestore.Transaction,
+  uid: string,
+  eventName: string,
+): Promise<MissionEventState> {
+  const missionQuery = db.collection("misiones").where("eventos", "array-contains", eventName);
+  const progressRef = db.collection("progreso_misiones").doc(uid);
+  const [missions, progressSnap] = await Promise.all([
+    transaction.get(missionQuery),
+    transaction.get(progressRef),
+  ]);
+  const progressData = progressSnap.exists ? progressSnap.data()! : {};
+  const updates: MissionEventState["updates"] = {};
+  let rewardXp = 0;
+  let rewardCredits = 0;
+  for (const missionDoc of missions.docs) {
+    const mission = missionDoc.data();
+    const events = Array.isArray(mission.eventos) ? mission.eventos : (mission.evento ? [mission.evento] : []);
+    if (!events.includes(eventName)) continue;
+    const old = progressData[missionDoc.id] || {progreso: 0, completada: false, accionesVerificadas: 0};
+    if (old.completada) continue;
+    const objective = Number(mission.objetivo);
+    if (!Number.isInteger(objective) || objective < 1) continue;
+    const actions = Number(old.accionesVerificadas || 0) + 1;
+    const completed = actions >= objective;
+    updates[missionDoc.id] = {progreso: Math.min(objective, actions), completada: completed, accionesVerificadas: actions};
+    if (completed) {
+      rewardXp += Math.max(0, Number(mission.recompensa?.xp) || 0);
+      rewardCredits += Math.max(0, Number(mission.recompensa?.credits) || 0);
+    }
+  }
+  return {progressRef, updates, rewardXp, rewardCredits};
+}
+
+function applyMissionEvent(transaction: FirebaseFirestore.Transaction, state: MissionEventState) {
+  if (Object.keys(state.updates).length) transaction.set(state.progressRef, state.updates, {merge: true});
+}
+
 export const ensurePlayer = onCall(async (request) => {
   const uid = uidFrom(request);
   const ref = playerRef(uid);
@@ -99,9 +144,11 @@ export const mine = onCall(async (request) => {
     if (player.scripts?.mineria?.active !== true) {
       throw new HttpsError("failed-precondition", "La minería está desactivada.");
     }
-    const xp = Number(player.xp || 0) + level;
-    const credits = Number(player.credits || 0) + 2 * level;
+    const missionState = await planMissionEvent(transaction, uid, "mine");
+    const xp = Number(player.xp || 0) + level + missionState.rewardXp;
+    const credits = Number(player.credits || 0) + 2 * level + missionState.rewardCredits;
     transaction.update(ref, {xp, credits, lastMinedAt: now});
+    applyMissionEvent(transaction, missionState);
     return {xp: level, credits: 2 * level, username: String(player.username || "Hacker").slice(0, 32)};
   }).then(async (result) => {
     await db.collection("mensajes").add({
@@ -131,11 +178,16 @@ export const upgradeScript = onCall(async (request) => {
     const cost = SCRIPT_COSTS[script] * Math.max(1, currentLevel);
     const credits = Number(player.credits || 0);
     if (credits < cost) throw new HttpsError("failed-precondition", "No tienes créditos suficientes.");
+    const missionState = await planMissionEvent(transaction, uid, "upgrade");
+    const xp = Number(player.xp || 0) + missionState.rewardXp;
+    const nextCredits = credits - cost + missionState.rewardCredits;
     transaction.update(ref, {
       [`scripts.${script}.level`]: currentLevel + 1,
-      credits: credits - cost,
-      publicStats: {level: Number(player.level || 1), xp: Number(player.xp || 0), credits: credits - cost, clan: player.clan || null},
+      credits: nextCredits,
+      xp,
+      publicStats: {level: Number(player.level || 1), xp, credits: nextCredits, clan: player.clan || null},
     });
+    applyMissionEvent(transaction, missionState);
     return {level: currentLevel + 1, cost};
   });
 });
@@ -164,6 +216,7 @@ export const claimNode = onCall(async (request) => {
     const credits = Number(player.credits || 0);
     if (credits < cost) throw new HttpsError("failed-precondition", "No tienes créditos suficientes.");
     const power = Math.max(1, Number(player.level) || 1) * 10 + powerRoll;
+    const missionState = await planMissionEvent(transaction, uid, "claimNode");
     if (power < defense) {
       transaction.update(userRef, {
         credits: credits - cost,
@@ -181,15 +234,17 @@ export const claimNode = onCall(async (request) => {
     };
     if (nodeSnap.exists) transaction.update(nodeRef, claimedNode);
     else transaction.create(nodeRef, claimedNode);
-    const xp = Number(player.xp || 0) + defense;
+    const xp = Number(player.xp || 0) + defense + missionState.rewardXp;
+    const nextCredits = credits + reward - cost + missionState.rewardCredits;
     transaction.update(userRef, {
-      credits: credits + reward - cost,
+      credits: nextCredits,
       xp,
       publicStats: {
-        level: Number(player.level || 1), xp, credits: credits + reward - cost,
+        level: Number(player.level || 1), xp, credits: nextCredits,
         clan: player.clan || null,
       },
     });
+    applyMissionEvent(transaction, missionState);
     return {success: true, cost, power, defense, reward, xp: defense, nodeName: node.name};
   });
 });
@@ -200,39 +255,17 @@ export const advanceMission = onCall(async (request) => {
   if (typeof missionId !== "string" || !/^[A-Za-z0-9_-]{1,100}$/.test(missionId)) {
     throw new HttpsError("invalid-argument", "La misión solicitada no es válida.");
   }
-  const missionRef = db.collection("misiones").doc(missionId);
-  const progressRef = db.collection("progreso_misiones").doc(uid);
-  const userRef = playerRef(uid);
-  return db.runTransaction(async (transaction) => {
-    const [missionSnap, progressSnap, userSnap] = await Promise.all([
-      transaction.get(missionRef), transaction.get(progressRef), transaction.get(userRef),
-    ]);
-    if (!missionSnap.exists) throw new HttpsError("not-found", "La misión no existe.");
-    if (!userSnap.exists) throw new HttpsError("failed-precondition", "No existe el perfil del jugador.");
-    const mission = missionSnap.data()!;
-    const objective = Number(mission.objetivo);
-    const rewardXp = Number(mission.recompensa?.xp);
-    const rewardCredits = Number(mission.recompensa?.credits);
-    if (!Number.isInteger(objective) || objective < 1 || !Number.isFinite(rewardXp) || rewardXp < 0 || !Number.isFinite(rewardCredits) || rewardCredits < 0) {
-      throw new HttpsError("failed-precondition", "La misión tiene datos de recompensa inválidos.");
-    }
-    const progressData = progressSnap.exists ? progressSnap.data()! : {};
-    const current = progressData[missionId] || {progreso: 0, completada: false};
-    if (current.completada) throw new HttpsError("failed-precondition", "Esta misión ya está completada.");
-    const next = Math.min(objective, Number(current.progreso || 0) + 1);
-    const completed = next >= objective;
-    transaction.set(progressRef, {[missionId]: {progreso: next, completada: completed}}, {merge: true});
-    if (completed) {
-      const player = userSnap.data()!;
-      const xp = Number(player.xp || 0) + rewardXp;
-      const credits = Number(player.credits || 0) + rewardCredits;
-      transaction.update(userRef, {
-        xp, credits,
-        publicStats: {level: Number(player.level || 1), xp, credits, clan: player.clan || null},
-      });
-    }
-    return {progress: next, completed, reward: completed ? {xp: rewardXp, credits: rewardCredits} : null};
-  });
+  const [missionSnap, progressSnap] = await Promise.all([
+    db.collection("misiones").doc(missionId).get(),
+    db.collection("progreso_misiones").doc(uid).get(),
+  ]);
+  if (!missionSnap.exists) throw new HttpsError("not-found", "La misión no existe.");
+  const progress = progressSnap.exists ? progressSnap.data()![missionId] : null;
+  return {
+    progress: Number(progress?.progreso || 0),
+    completed: progress?.completada === true,
+    reward: null,
+  };
 });
 
 export const sendChat = onCall(async (request) => {
