@@ -35,7 +35,8 @@ service cloud.firestore {
         && (resource.data.channel == 'global'
           || (resource.data.channel is string
             && resource.data.channel.matches('clan_[A-Za-z0-9_-]{1,128}')
-            && isClanMember(resource.data.channel.replace('clan_', ''))));
+            && resource.data.clanId is string
+            && isClanMember(resource.data.clanId)));
       allow write: if false;
     }
 

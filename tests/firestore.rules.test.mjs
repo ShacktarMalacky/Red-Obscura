@@ -27,7 +27,7 @@ before(async () => {
     await setDoc(doc(context.firestore(), 'progreso_misiones', 'alice'), {intro: {progreso: 0}});
     await setDoc(doc(context.firestore(), 'clanes', 'clan1'), {leader: 'alice', members: ['alice']});
     await setDoc(doc(context.firestore(), 'mensajes', 'global1'), {channel: 'global', text: 'public'});
-    await setDoc(doc(context.firestore(), 'mensajes', 'clan1'), {channel: 'clan_clan1', text: 'private'});
+    await setDoc(doc(context.firestore(), 'mensajes', 'clan1'), {channel: 'clan_clan1', clanId: 'clan1', text: 'private'});
   });
 });
 
@@ -46,7 +46,7 @@ test('authenticated players can read public game collections but cannot forge ec
   await assertSucceeds(getDocs(collection(db, 'misiones')));
   await assertFails(getDocs(collection(db, 'mensajes')));
   await assertSucceeds(getDocs(query(collection(db, 'mensajes'), where('channel', '==', 'global'))));
-  await assertSucceeds(getDocs(query(collection(db, 'mensajes'), where('channel', '==', 'clan_clan1'))));
+  await assertSucceeds(getDocs(query(collection(db, 'mensajes'), where('channel', '==', 'clan_clan1'), where('clanId', '==', 'clan1'))));
   await assertSucceeds(getDoc(doc(db, 'jugadores', 'alice')));
   await assertFails(updateDoc(doc(db, 'jugadores', 'alice'), {credits: 999999}));
   await assertFails(setDoc(doc(db, 'nodos', 'nodo-alfa'), {owner: 'alice'}));

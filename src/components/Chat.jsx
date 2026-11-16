@@ -14,7 +14,7 @@ export default function Chat() {
   useEffect(() => {
     let q;
     if (channel === 'global') q = query(collection(db, 'mensajes'), where('channel', '==', 'global'), orderBy('timestamp', 'asc'), limitToLast(50));
-    else if (channel === 'clan' && player?.clan) q = query(collection(db, 'mensajes'), where('channel', '==', `clan_${player.clan}`), orderBy('timestamp', 'asc'), limitToLast(50));
+    else if (channel === 'clan' && player?.clan) q = query(collection(db, 'mensajes'), where('channel', '==', `clan_${player.clan}`), where('clanId', '==', player.clan), orderBy('timestamp', 'asc'), limitToLast(50));
     else q = query(collection(db, 'mensajes'), where('channel', '==', 'global'), orderBy('timestamp', 'asc'), limitToLast(50));
     const unsub = onSnapshot(q, (snap) => setMessages(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
     return () => unsub();

@@ -271,6 +271,7 @@ export const sendChat = onCall(async (request) => {
     const dice = Math.floor(Math.random() * 20) + 1;
     await db.collection("mensajes").add({
       channel,
+      clanId: channel === "global" ? null : channel.slice("clan_".length),
       user: "Sistema",
       text: `${String(player.username || "Hacker").slice(0, 32)} ha sacado un ${dice} en 1d20.`,
       timestamp: now,
@@ -280,6 +281,7 @@ export const sendChat = onCall(async (request) => {
   }
   await db.collection("mensajes").add({
     channel,
+    clanId: channel === "global" ? null : channel.slice("clan_".length),
     user: String(player.username || "Hacker").slice(0, 32),
     text: cleanText,
     timestamp: now,
