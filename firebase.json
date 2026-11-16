@@ -1,1 +1,10 @@
-ewogICJmdW5jdGlvbnMiOiBbeyJzb3VyY2UiOiAiZnVuY3Rpb25zIiwgImNvZGViYXNlIjogImRlZmF1bHQifV0sCiAgImZpcmVzdG9yZSI6IHsicnVsZXMiOiAiZmlyZXN0b3JlLnJ1bGVzIn0sCiAgImVtdWxhdG9ycyI6IHsKICAgICJmaXJlc3RvcmUiOiB7InBvcnQiOiA4MDgwfSwKICAgICJmdW5jdGlvbnMiOiB7InBvcnQiOiA1MDAxfSwKICAgICJ1aSI6IHsiZW5hYmxlZCI6IGZhbHNlfSwKICAgICJzaW5nbGVQcm9qZWN0TW9kZSI6IHRydWUKICB9Cn0K
+{
+  "functions": [{"source": "functions", "codebase": "default"}],
+  "firestore": {"rules": "firestore.rules"},
+  "emulators": {
+    "firestore": {"port": 8080},
+    "functions": {"port": 5001},
+    "ui": {"enabled": false},
+    "singleProjectMode": true
+  }
+}
