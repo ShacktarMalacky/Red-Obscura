@@ -1,18 +1,58 @@
-rules_version='2'
+rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function ownsPlayer(playerId) {
+      return signedIn() && request.auth.uid == playerId;
+    }
+
+
+
+    // All game-state writes run through authenticated Cloud Functions (Admin
+    // SDK). The client SDK is read-only, with per-user mission privacy.
+    match /jugadores/{playerId} {
+      allow read: if ownsPlayer(playerId);
+      allow write: if false;
+    }
+
+    match /jugadores_publicos/{playerId} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+
+    match /mensajes/{messageId} {
+      // Chat was already readable to any signed-in account in the prior app.
+      // Keep that compatibility; message creation is server-mediated.
+      allow read: if signedIn();
+      allow write: if false;
+    }
+
+    match /clanes/{clanId} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+
+    match /nodos/{nodeId} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+
+    match /misiones/{missionId} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+
+    match /progreso_misiones/{playerId} {
+      allow read: if ownsPlayer(playerId);
+      allow write: if false;
+    }
+
     match /{document=**} {
-      // This rule allows anyone with your database reference to view, edit,
-      // and delete all data in your database. It is useful for getting
-      // started, but it is configured to expire after 30 days because it
-      // leaves your app open to attackers. At that time, all client
-      // requests to your database will be denied.
-      //
-      // Make sure to write security rules for your app before that time, or
-      // else all client requests to your database will be denied until you
-      // update your rules.
-      allow read, write: if request.time < timestamp.date(2026, 6, 28);
+      allow read, write: if false;
     }
   }
 }
