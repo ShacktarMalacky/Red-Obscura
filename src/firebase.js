@@ -19,3 +19,4 @@ const app = isFirebaseConfigured && getApps().length === 0 ? initializeApp(fireb
 
 export const auth = isFirebaseConfigured ? getAuth(app) : null;
 export const db = isFirebaseConfigured ? getFirestore(app) : null;
+export {app};

@@ -2,72 +2,35 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { GameContext } from '../context/GameContext';
 import { db } from '../firebase';
-import { collection, onSnapshot, doc, setDoc, updateDoc, increment } from 'firebase/firestore';
-
-// Nodos iniciales de la Red Oscura. Se siembran en Firestore la primera vez.
-const NODOS_INICIALES = [
-  { id: 'nodo-alfa', name: 'Nodo Alfa', defense: 10, reward: 50, x: 15, y: 20 },
-  { id: 'nodo-beta', name: 'Nodo Beta', defense: 25, reward: 90, x: 55, y: 15 },
-  { id: 'nodo-gamma', name: 'Nodo Gamma', defense: 40, reward: 140, x: 80, y: 35 },
-  { id: 'nodo-delta', name: 'Nodo Delta', defense: 60, reward: 210, x: 30, y: 55 },
-  { id: 'nodo-omega', name: 'Nodo Omega', defense: 100, reward: 400, x: 65, y: 70 },
-];
+import {collection, onSnapshot} from 'firebase/firestore';
+import {claimNode, ensureWorld} from '../gameActions';
 
 export default function Mapa() {
-  const { player, updatePlayer } = useContext(GameContext);
+  const {player} = useContext(GameContext);
   const [nodos, setNodos] = useState([]);
   const [seleccionado, setSeleccionado] = useState(null);
   const [mensaje, setMensaje] = useState('');
 
   useEffect(() => {
-    const unsub = onSnapshot(collection(db, 'nodos'), async (snap) => {
-      if (snap.empty) {
-        // Sembrar nodos iniciales una sola vez
-        await Promise.all(
-          NODOS_INICIALES.map((n) =>
-            setDoc(doc(db, 'nodos', n.id), {
-              name: n.name,
-              defense: n.defense,
-              reward: n.reward,
-              x: n.x,
-              y: n.y,
-              owner: null,
-              ownerName: null,
-            })
-          )
-        );
-        return;
-      }
-      setNodos(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    ensureWorld().catch((error) => console.error('Error al preparar el mapa:', error));
+    const unsub = onSnapshot(collection(db, 'nodos'), (snap) => {
+      setNodos(snap.docs.map((d) => ({id: d.id, ...d.data()})));
     });
     return () => unsub();
   }, []);
 
   const conquistar = async (nodo) => {
     if (!player) return;
-    if (nodo.owner === player.uid) {
-      setMensaje('Ya controlas este nodo.');
-      return;
+    try {
+      const result = await claimNode(nodo.id);
+      if (result.success) {
+        setMensaje(`¡Conquistaste ${result.nodeName}! +${result.reward} créditos, +${result.xp} XP.`);
+      } else {
+        setMensaje(`Ataque fallido a ${result.nodeName}. Perdiste ${result.cost} créditos. (Poder ${result.power} vs Defensa ${result.defense})`);
+      }
+    } catch (error) {
+      setMensaje(error?.message || 'No se pudo completar el ataque.');
     }
-    const costo = nodo.defense * 5;
-    if (player.credits < costo) {
-      setMensaje(`Necesitas ${costo} créditos para atacar ${nodo.name}.`);
-      return;
-    }
-    // El ataque tiene éxito si superas la defensa del nodo (nivel del jugador + suerte)
-    const poder = (player.level || 1) * 10 + Math.floor(Math.random() * 50);
-    if (poder < nodo.defense) {
-      await updatePlayer({ credits: increment(-costo) });
-      setMensaje(`Ataque fallido a ${nodo.name}. Perdiste ${costo} créditos. (Poder ${poder} vs Defensa ${nodo.defense})`);
-      return;
-    }
-    await updateDoc(doc(db, 'nodos', nodo.id), {
-      owner: player.uid,
-      ownerName: player.username || 'Hacker',
-      defense: increment(5),
-    });
-    await updatePlayer({ credits: increment(nodo.reward - costo), xp: increment(nodo.defense) });
-    setMensaje(`¡Conquistaste ${nodo.name}! +${nodo.reward} créditos, +${nodo.defense} XP.`);
   };
 
   const nodosPropios = nodos.filter((n) => n.owner === player?.uid).length;

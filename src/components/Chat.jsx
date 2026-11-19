@@ -2,7 +2,8 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { GameContext } from '../context/GameContext';
 import { db } from '../firebase';
-import { collection, addDoc, onSnapshot, query, orderBy, limitToLast, where } from 'firebase/firestore';
+import {collection, onSnapshot, query, orderBy, limitToLast, where} from 'firebase/firestore';
+import {sendChat} from '../gameActions';
 
 export default function Chat() {
   const { player } = useContext(GameContext);
@@ -13,24 +14,25 @@ export default function Chat() {
   useEffect(() => {
     let q;
     if (channel === 'global') q = query(collection(db, 'mensajes'), where('channel', '==', 'global'), orderBy('timestamp', 'asc'), limitToLast(50));
-    else if (channel === 'clan' && player?.clan) q = query(collection(db, 'mensajes'), where('channel', '==', `clan_${player.clan}`), orderBy('timestamp', 'asc'), limitToLast(50));
+    else if (channel === 'clan' && player?.clan) q = query(collection(db, 'mensajes'), where('channel', '==', `clan_${player.clan}`), where('clanId', '==', player.clan), orderBy('timestamp', 'asc'), limitToLast(50));
     else q = query(collection(db, 'mensajes'), where('channel', '==', 'global'), orderBy('timestamp', 'asc'), limitToLast(50));
     const unsub = onSnapshot(q, (snap) => setMessages(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
     return () => unsub();
   }, [channel, player?.clan]);
 
   const sendMessage = async () => {
-    if (!input.trim() || !player) return;
-    if (input.startsWith('/')) {
-      const parts = input.split(' ');
-      if (parts[0] === '/roll') {
-        const dice = Math.floor(Math.random() * 20) + 1;
-        await addDoc(collection(db, 'mensajes'), { channel, user: 'Sistema', text: `${player.username} ha sacado un ${dice} en 1d20.`, timestamp: Date.now(), uid: 'sistema' });
-        setInput(''); return;
-      }
+    const text = input.trim();
+    if (!text || !player) return;
+    if (text.startsWith('/') && text !== '/roll') {
+      setInput('');
+      return;
     }
-    await addDoc(collection(db, 'mensajes'), { channel, user: player.username, text: input, timestamp: Date.now(), uid: player.uid });
-    setInput('');
+    try {
+      await sendChat(text, channel === 'clan' && player.clan ? `clan_${player.clan}` : 'global');
+      setInput('');
+    } catch (error) {
+      console.error('Error al enviar mensaje:', error);
+    }
   };
 
   return (
