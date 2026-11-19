@@ -64,6 +64,35 @@ test('mining has server cooldown and cannot be repeated to mint credits', async 
   await assert.rejects(call('mine', aliceToken), /enfriamiento/i);
 });
 
+test('simultaneous mining requests commit at most one reward', async () => {
+  const contender = await createUser(`race-${Date.now()}@example.test`);
+  await call('ensurePlayer', contender.token);
+  const results = await Promise.allSettled([
+    call('mine', contender.token),
+    call('mine', contender.token),
+  ]);
+  assert.equal(results.filter((result) => result.status === 'fulfilled').length, 1);
+  assert.equal(results.filter((result) => result.status === 'rejected').length, 1);
+  const player = (await adminDb.collection('jugadores').doc(contender.uid).get()).data();
+  assert.equal(player.credits, 102);
+  assert.ok(player.lastMinedAt > 0);
+});
+
+test('simultaneous clan withdrawals cannot overdraw the bank', async () => {
+  const leader = await createUser(`clan-race-${Date.now()}@example.test`);
+  await call('ensurePlayer', leader.token);
+  const {clanId} = await call('createClan', leader.token, {name: 'Race clan'});
+  await call('depositClan', leader.token, {amount: 100});
+  const results = await Promise.allSettled([
+    call('withdrawClan', leader.token, {amount: 80}),
+    call('withdrawClan', leader.token, {amount: 80}),
+  ]);
+  assert.equal(results.filter((result) => result.status === 'fulfilled').length, 1);
+  assert.equal(results.filter((result) => result.status === 'rejected').length, 1);
+  assert.equal((await adminDb.collection('clanes').doc(clanId).get()).data().bank, 20);
+  assert.equal((await adminDb.collection('jugadores').doc(leader.uid).get()).data().credits, 80);
+});
+
 test('script upgrades validate names and charge credits server-side', async () => {
   const playerRef = adminDb.collection('jugadores').doc(aliceUid);
   const beforePlayer = await playerRef.get();
